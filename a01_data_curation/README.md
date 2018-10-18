@@ -1,19 +1,36 @@
 # A01 Data Curation
 
-<p xmlns:dct="http://purl.org/dc/terms/" xmlns:vcard="http://www.w3.org/2001/vcard-rdf/3.0#">
-  <a rel="license"
-     href="http://creativecommons.org/publicdomain/zero/1.0/">
-    <img src="http://i.creativecommons.org/p/zero/1.0/88x31.png" style="border-style: none;" alt="CC0" />
-  </a>
-  <br />
-  To the extent possible under law,
-  <a rel="dct:publisher"
-     href="https://github.com/jacobw125/data512-hcds">
-    <span property="dct:title">Jacob Warwick</span></a>
-  has waived all copyright and related or neighboring rights to
-  <span property="dct:title">A01 Data Curation</span>.
-This work is published from:
-<span property="vcard:Country" datatype="dct:ISO3166"
-      content="US" about="https://github.com/jacobw125/data512-hcds">
-  United States</span>.
-</p>
+## Goal
+This project downloads monthly page-view data from the English Wikipedia API, then creates a simple visualization displaying those data over time.
+
+## Data souce, attribution, and license.
+The data are sourced from the [Wikimedia Foundation](https://wikitech.wikimedia.org/wiki/Analytics/AQS/Pageviews). According to Wikipedia, these 
+data are licensed under the [CC-BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) and [GFDL](https://www.gnu.org/licenses/fdl-1.3.en.html) licenses.
+Accordingly, this work is also licensed under CC-BY-SA 3.0 and GFDL (see LICENSE.txt).
+
+## Artifacts from this analysis
+### collected_data
+This folder contains JSON files of the raw data dumps downloaded from Wikimedia. 
+The files are named in the format {legacy,pageview}\_{access_type}\_{start in YYYYMMDDHH}-{end in YYYYMMDDHH}.json.
+
+### figure_1_million_page_views_over_time.png
+A copy of the final figure produced by the analysis.
+
+### en-wikipedia_traffic_200801-201709.csv
+A UTF-8 formatted comma-separated-values file containing the following columns:
+
+* year (YYYY)
+* month (MM)
+* pagecount_all_views
+* pagecount_desktop_views
+* pagecount_mobile_views
+* pageview_all_views
+* pageview_desktop_views
+* pageview_mobile_views
+
+All columns contain integers with some columns formatted as floats. 
+
+In May 2016 the Wikimedia foundation changed from the PageCount to the PageView system which excludes spiders and crawlers. 
+For more information on this, see [this page](https://meta.wikimedia.org/wiki/Research:Page_view).
+
+Additionally, it appears there are artifacts of the changeover in the row corresponding to August 2016. This is described in my report.
