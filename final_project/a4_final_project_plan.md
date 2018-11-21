@@ -1,7 +1,7 @@
 # A4: Final Project Plan
 __Jacob Warwick; November 21, 2018__
 
-##Why are you planning to do this analysis?
+## Why are you planning to do this analysis?
 
 <small>*Provide background information about the topic, research questions/hypotheses, (imagined) business goals, and anything else that will be required to properly contextualize your study.*</small>
 
