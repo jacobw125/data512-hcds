@@ -2,6 +2,7 @@
 __Jacob Warwick; November 21, 2018__
 
 ##Why are you planning to do this analysis?
+
 <small>*Provide background information about the topic, research questions/hypotheses, (imagined) business goals, and anything else that will be required to properly contextualize your study.*</small>
 
 The topic of immigration is generally considered to be a "hot button" issue; indeed, it has been a contentious issue in the political sphere for my entire lifetime, and one that has generated much angst over the course of U.S. history. Generations of immigrant communities have been vilified and then gradually integrated into American society. Often, politicians opposed immigration to further their own rise to power, by fomenting racism and xenophobic fear and by encouraging the electorate to see themselves as victims of immigration policy. At no time in recent history has this been more true than in the 2016 election and subsequent Trump presidency. In modern times, it can feel like immigration has become little more than a dog-whistle for race-motivated xenophobia.
@@ -21,6 +22,7 @@ St. John, Rachel. *Line in the Sand: A History of the Western U.S.-Mexico Border
  
 
 ## What is your plan?
+
 <small>*Describe and link to the data source(s) will you collect, how 
 data will be collected and processed, the analysis you intend to perform, and the outcomes and deliverables you anticipate.*</small>
 
@@ -49,11 +51,15 @@ After cleaning the data, I will start with some general histograms and frequency
 
  
 ## Are there any unknowns or dependencies that might affect your ability to complete this project? 
+
 The data are large, but represent only one visa program. The U.S. immigration system is huge and complex, so I'm worried I might need to combine this source with additional sources from other types of visa programs to get a more complete picture. If so, those data are also available from the same source, but merging the sets could be complicated.
 
-## How do human-centered design considerations inform... 
+## How do human-centered design considerations inform...
+ 
 ### a. your decision to pursue this project
+
 This data is a record of immigration decisions made by the U.S. Federal Government. In a sense, it is entirely human centered - it is a log of decisions this office made which altered the lives and fates of millions of people. Beyond that, this dataset has the potential to de-anonymize potential immigrants, which speaks directly to themes of privacy and consent.
 
 ### b. your approach to performing the work?
+
 I will be performing this work under the stanards and best practices for open research established over this course. Additionally, I will be using models and data anlysis to understand the human side of the data, instead of modeling it for commercial reasons, like for consumer research. I hope the models will help me learn more about the people who are a part of this system and whose lives were affected by it.
