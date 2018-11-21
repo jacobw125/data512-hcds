@@ -29,13 +29,13 @@ unknown amount of error (with unknown bias) to the process.
 ## Data 
 
 #### Politicians by Country from the English-language Wikipedia
-page_data.csv was sourced from "Politicians by Country from the English-language Wikipedia" by Oliver Keyes. 
+page_data.csv was sourced from "Politicians by Country from the English-language Wikipedia" by Os Keyes. 
 It is licensed CC-BY-SA 4.0 and can be found here:
 https://figshare.com/articles/Untitled_Item/5513449
 
 The Chicago-style citation for this work is:
 
-Keyes, Oliver. 2017. “Politicians by Country from the English-language Wikipedia”. figshare. 
+Keyes, Os. 2017. “Politicians by Country from the English-language Wikipedia”. figshare. 
 doi:10.6084/m9.figshare.5513449.v6.
 
 The columns in this dataset are:
@@ -55,6 +55,8 @@ The Population Reference Bureau and its affiliated entities do not publish a lic
 I have contacted their public information email address to inquire about their license, and am submitting the assignment under
 the reasonable assumption that, since collecting and publishing this data seems to be one of the main goals of the PRB,
 the use of their data in an academic research context will be allowed.
+
+UPDATE 11/20/18: The Population Research Bureau has granted me permission to reuse and publish this data for the purposes of this assignment.
 
 The columns in this dataset are:
 * Geography (str): country or region name
