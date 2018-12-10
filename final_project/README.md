@@ -14,15 +14,11 @@ In this report, I examine data from the PERM and H1B legal immigration programs 
 
 ## Files
 * See LICENSE.txt for the license information for this work
-* data_sources/ contains the original data downloads and two data dictionaries fro the USDOL web site.
+* data_sources/ contains two data dictionaries fro the USDOL web site. Originally, it contained downloads of the data, but they were too large to be hosted on github. Instead, I am leaving them out because I have the same data replicated in extracted_data in a smaller format.
 * extracted_data/ contains the same data, cleaned up and stored in compressed, open formats
 * 01_extract.R contains some basic data extractinon and cleaning code which is referenced in the report
 * immigration_modeling.Rmd is the my final project report. I am also checking in a compiled version, immigration_modeling.nb.html, which can be viewed in any web browser.
+The following link may be helpful:
 
-Documentation and license information for your data, etc. (same basic reqs as A1 and A2)
-b.
-Hyperlinks to ALL relevant resources (TOS, API documentation, license deeds, etc)
-c.
-A short summary of your study that describes what you did, and what you found. 
-d.
-A link to the course wiki site.
+https://htmlpreview.github.io/?https://github.com/jacobw125/data512-hcds/blob/master/final_project/immigration_modeling.nb.html
+
