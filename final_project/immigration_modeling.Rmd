@@ -1,0 +1,667 @@
+---
+title: "Modeling legal immigration to the United States"
+author: "Jacob Warwick"
+date: "December 9, 2019"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Introduction
+Immigration has been a contentious issue in the political sphere for my entire lifetime, and one that has generated much angst over the course of U.S. history. Generations of immigrant communities have been villified and then gradually integrated into American society. Often, politicians used immigration as a dog-whistle to further their own rise to power, by fomenting racism and xenophobic fear, and by encouraging the electorate to see themselves as victims of immigration policy. At no time in recent history has this been more true than in the 2016 election and subsequent Trump presidency. In modern times, it can feel like immigration has become little more than a dog-whistle for race-motivated xenophobia.
+
+History paints a more nuanced picture of immigration into the United States. While the U.S. has gone through periods of intense xenophobia not unlike the one we see today, at other times, it has heavily relied on immigrants, for example the foreign workers brought in to prevent agricultural disaster as part of the World War II-era Bracero program. [1] The United States has been complicit in creating and inflaming conflicts in South and Central America, creating millions of new refugees and asylum seekers, arguably creating the immigration "crisis" that we now find ourselves in. [2]
+
+The Employment & Training Administration, Office of Foreign Labor Certification is a government entity in the U.S. Department of Labor which is responsible for reviewing corporate applications on behalf of foreign workers. While the US Citizenship and Immigration Services - a component of the Department of Homeland Security - is responsble for issuing worker visas and enforces a strict cap on the number of workers allow to legally immigrate under these programs,the Office of Foreign Labor Certification is purely concerned with whether the corporate application matches the goals of the permit programs under U.S. law. As a result, the data released from that office describes occupations, not immigrants. In this report, I examine data from the H1B and Permanent Worker (PERM) programs. My goal is to better understand the industries and companies that are specifically benefitting from these programs, to ask if they are fulfilling their stated purpose.
+
+# Background (or Related Work)
+
+The H1B program was created specifically for "US employers seeking highly skilled foreign professionals" [7]. Under law, applicants (companies) must prove that the role they are offering to a potential H1B receipient couldn't be filled by a U.S. worker, and the total number of H1B visas granted is capped by the Department of Homeland Security at 65,000 per year. [7] Interestingly, since 2017, the H1B program was targeted by the Trump administration in a way that disproportionally affected Indian applicants, but did not change the overall purpose or mission of the program [8].
+
+Research indicates that most H1B receipients are in STEM fields, though "high-skilled workers [also] play other crucial roles in the U.S. economy." [7] I've had a hard time finding good resources on the actual breakdown of approved H1B workers in various industries. As a result, the goal of this project is to further explore the specific roles and industries that benefit from the H1B and permanent resiendent programs.
+
+# Methods
+
+First, I will extract the data from the format it is suppled in (Microsoft Excel), and process/clean it so that columns with different true/false encodings are uniformly represented (some columns have "Y/N" with "A" for absent, others have "NA" for absent, and some rows also have null values).
+
+Next, I use simple statistics to display the industries that are getting the most number of approvals and denials in both programs. The visualization component is the bulk of the work in this step. I largely focus on industry codes that are repesented by NAICS (pronounced "nakes") codes, a uniform set of categories for occupations developed and adopted between the Mexico, the U.S., and Canada. Each code is 5 digits, with the first two representing the most broad categorization of industry. 
+
+Following that, I attempt to use wage information, job titles, and industry codes to model whether the application will be accepted or denied using simple, interpretable models. By examining the coefficients of these models, I hope to be able to draw additional conclusions about the behavior of these programs.
+
+# Findings
+
+## 1. Data processing
+Please see 01_extract.R for the code that extracts data from the XLS file and does some basic cleaning.
+
+```{r}
+h1b = read.csv(file=gzfile("extracted_data/h1b.tsv.gz"), sep="\t")
+perm = read.csv(file=gzfile("extracted_data/perm.tsv.gz"), sep="\t")
+```
+
+Next, I also downloaded data from the U.S. Census Bureau mapping NAICS codes and categories to human-readable descriptions:
+https://www.census.gov/eos/www/naics/downloadables/downloadables.html
+https://www.census.gov/eos/www/naics/2017NAICS/2017_NAICS_Structure.xlsx
+This data are available in the data_sources folder. I manually extracted this data into a CSV file for easier parsing, then removed a series of "T" symbols (an Excel artifact) at the end of lines using the following commands in VI:
+```
+%s/T$//
+%s/T $//
+%s/T"$/"/
+```
+I also used a search for /,$ to manually remove empty lines (representing section headers in the original Excel file), and set line endings to unix with :set ff=unix.
+
+The result is available in my extracted_data folder.
+```{r}
+naics <- read.csv("extracted_data/NAICS_codes.csv", stringsAsFactors = F, col.names = c('code', 'title'))
+head(naics)
+```
+
+Next, I merged the NAICS data with both datasets:
+```{r}
+require(dplyr)
+require(tidyr)
+
+h1b = h1b %>%
+  mutate("NAICS_INDUSTRY_CODE" = substr(NAICS_CODE, 0,2),
+         "NAICS_CODE_L3" = substr(NAICS_CODE, 0, 3),
+         "NAICS_CODE_L4" = substr(NAICS_CODE, 0, 4),
+         'NAICS_CODE' = as.character(NAICS_CODE)
+  ) %>%
+  left_join(naics, by=c("NAICS_CODE"="code")) %>%
+  rename("NAICS_JOB_TITLE" = "title") %>%
+  left_join(naics, by=c("NAICS_CODE_L3"="code")) %>%
+  rename("NAICS_L3" = "title") %>%
+  left_join(naics, by=c("NAICS_CODE_L4"="code")) %>%
+  rename("NAICS_L4" = "title") %>%
+  left_join(naics, by=c("NAICS_INDUSTRY_CODE" = "code")) %>%
+  rename("NAICS_INDUSTRY" = "title")
+
+perm = perm %>%
+  mutate("NAICS_INDUSTRY_CODE" = substr(NAICS_US_CODE, 0,2),
+         "NAICS_CODE_L3" = substr(NAICS_US_CODE, 0, 3),
+         "NAICS_CODE_L4" = substr(NAICS_US_CODE, 0, 4),
+         'NAICS_CODE' = as.character(NAICS_US_CODE)
+  ) %>%
+  left_join(naics, by=c("NAICS_CODE"="code")) %>%
+  rename("NAICS_JOB_TITLE" = "title") %>%
+  left_join(naics, by=c("NAICS_CODE_L3"="code")) %>%
+  rename("NAICS_L3" = "title") %>%
+  left_join(naics, by=c("NAICS_CODE_L4"="code")) %>%
+  rename("NAICS_L4" = "title") %>%
+  left_join(naics, by=c("NAICS_INDUSTRY_CODE" = "code")) %>%
+  rename("NAICS_INDUSTRY" = "title")
+
+h1b %>% select(JOB_TITLE, NAICS_JOB_TITLE, NAICS_INDUSTRY) %>% head
+``` 
+
+```{r}
+perm %>% select(JOB_INFO_JOB_TITLE, NAICS_JOB_TITLE, NAICS_INDUSTRY) %>% head
+```
+
+### Exploratory data analysis
+
+Before we can ask which roles are most often being accepted and denied under both programs, it's important to understand the rates of acceptance / denial:
+```{r}
+h1b %>% pull(CASE_STATUS) %>% table
+```
+CERTIFIED-WITHDRAWN means that the H1B was granted, but the worker was fired or left the job once in the US. Under the law, companies are required to notify DHS when this happens, and the status is changed from CERTIFIED to CERTIFIED-WITHDRAWN. [3]
+
+For the purposes of this study, we're not going to learn much from WITHDRAWN, so I am dropping those rows.
+```{r}
+h1b = h1b %>% filter(CASE_STATUS != "WITHDRAWN")
+h1b$CERTIFIED = h1b$CASE_STATUS %in% c("CERTIFIED", "CERTIFIED-WITHDRAWN")
+h1b$CERTIFIED %>% table
+```
+98% of H1B applications from companies were approved by the Dept. of Labor. Note that after this step, the USCIS imposes a cap on the total number H1Bs granted.
+
+```{r}
+perm %>% pull(CASE_STATUS) %>% table
+```
+
+"Certified expired" status has to do with a paperwork filing designation and isn't important here. [4] As before, I'll remove Withdrawn.
+```{r}
+perm = perm %>% filter(CASE_STATUS != 'Withdrawn')
+perm$CERTIFIED = perm$CASE_STATUS %in% c("Certified", "Certified-Expired")
+perm$CERTIFIED %>% table
+```
+94.6% of PERM applications from companies were approved by the Dept. of Labor. Again, after this step the USCIS imposes a cap.
+
+#### What kinds of jobs are commonly accepted?
+
+```{r fig.height=9, fig.width=10}
+require(ggplot2)
+require(scater)
+
+# [5] From http://www.cookbook-r.com/Graphs/Multiple_graphs_on_one_page_(ggplot2)/
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+
+
+h1 = h1b %>% group_by(NAICS_INDUSTRY) %>% summarize(
+  n_certified = sum(CERTIFIED)
+) %>% select(NAICS_INDUSTRY, n_certified) %>% 
+  arrange(-n_certified) %>% 
+  head(n=25) %>%
+  ggplot(aes(x=reorder(NAICS_INDUSTRY, n_certified), y=n_certified)) + 
+  geom_col() + 
+  theme_classic() + 
+  coord_flip() + 
+  xlab(NULL) + 
+  ylab("Number of cases certified") + 
+  ggtitle("H1B: most commonly certified industries")
+
+p = perm %>% group_by(NAICS_INDUSTRY) %>% summarize(
+  n_certified = sum(CERTIFIED)
+) %>% select(NAICS_INDUSTRY, n_certified) %>% 
+  arrange(-n_certified) %>% 
+  head(n=25) %>%
+  ggplot(aes(x=reorder(NAICS_INDUSTRY, n_certified), y=n_certified)) + 
+  geom_col() + 
+  theme_classic() + 
+  coord_flip() + 
+  xlab(NULL) + 
+  ylab("Number of cases certified") + 
+  ggtitle("PERM: most commonly certified industries")
+
+multiplot(h1, p)
+``` 
+
+
+** By sub-level**
+```{r fig.height=9, fig.width=10}
+require(ggplot2)
+
+h1 = h1b %>% group_by(NAICS_L4) %>% summarize(
+  n_certified = sum(CERTIFIED)
+) %>% select(NAICS_L4, n_certified) %>% 
+  arrange(-n_certified) %>% 
+  head(n=25) %>%
+  ggplot(aes(x=reorder(NAICS_L4, n_certified), y=n_certified)) + 
+  geom_col() + 
+  theme_classic() + 
+  coord_flip() + 
+  xlab(NULL) + 
+  ylab("Number of cases certified") + 
+  ggtitle("H1B: most commonly certified by sub-industry")
+
+
+p = perm %>% group_by(NAICS_L4) %>% summarize(
+  n_certified = sum(CERTIFIED)
+) %>% select(NAICS_L4, n_certified) %>% 
+  arrange(-n_certified) %>% 
+  head(n=25) %>%
+  ggplot(aes(x=reorder(NAICS_L4, n_certified), y=n_certified)) + 
+  geom_col() + 
+  theme_classic() + 
+  coord_flip() + 
+  xlab(NULL) + 
+  ylab("Number of cases certified") + 
+  ggtitle("PERM: most commonly certified by sub-industry")
+
+multiplot(h1, p)
+```
+
+
+** By job title**
+```{r fig.height=9, fig.width=10}
+require(ggplot2)
+
+h1 = h1b %>% group_by(NAICS_JOB_TITLE) %>% summarize(
+  n_certified = sum(CERTIFIED)
+) %>% select(NAICS_JOB_TITLE, n_certified) %>% 
+  arrange(-n_certified) %>% 
+  head(n=25) %>%
+  ggplot(aes(x=reorder(NAICS_JOB_TITLE, n_certified), y=n_certified)) + 
+  geom_col() + 
+  theme_classic() + 
+  coord_flip() + 
+  xlab(NULL) + 
+  ylab("Number of cases certified") + 
+  ggtitle("H1B: most commonly certified by job title")
+
+
+p = perm %>% group_by(NAICS_JOB_TITLE) %>% summarize(
+  n_certified = sum(CERTIFIED)
+) %>% select(NAICS_JOB_TITLE, n_certified) %>% 
+  arrange(-n_certified) %>% 
+  head(n=25) %>%
+  ggplot(aes(x=reorder(NAICS_JOB_TITLE, n_certified), y=n_certified)) + 
+  geom_col() + 
+  theme_classic() + 
+  coord_flip() + 
+  xlab(NULL) + 
+  ylab("Number of cases certified") + 
+  ggtitle("PERM: most commonly certified by job title")
+
+multiplot(h1, p)
+```
+
+It's clear from this analysis that not only are a huge number of these cerifications going to technical industries, but a huge proportion are specifically computer engineering, programming, software design, engieering, and other computer or tech-related disciplines. It's clear just from previewing the top values in each category that this distribution is far from flat.
+
+It's not worth examining the last-accepted job titles, since there are so many unique options that didn't receive many certifications. But, it's worth examining the industries that received few certifications, relative to their number of applications, to see who's applying but *not* getting in.
+
+```{r fig.height=9, fig.width=10}
+h1 = h1b %>% group_by(NAICS_INDUSTRY) %>% 
+  filter(!is.na(NAICS_INDUSTRY)) %>%
+    summarize(
+    pct_denied = sum(!CERTIFIED) / n()
+  ) %>% select(NAICS_INDUSTRY, pct_denied) %>% 
+  arrange(-pct_denied) %>% 
+  head(n=25) %>%
+  ggplot(aes(x=reorder(NAICS_INDUSTRY, pct_denied), y=pct_denied)) + 
+  geom_col() + 
+  theme_classic() + 
+  coord_flip() + 
+  xlab(NULL) + 
+  ylab("Percent of cases denied") + 
+  ggtitle("H1B: most denied industries as a percent of applications")
+
+p = perm %>% group_by(NAICS_INDUSTRY) %>%
+filter(!is.na(NAICS_INDUSTRY)) %>%
+summarize(
+  pct_denied = sum(!CERTIFIED) / n()
+) %>% select(NAICS_INDUSTRY, pct_denied) %>% 
+  arrange(-pct_denied) %>% 
+  head(n=25) %>%
+  ggplot(aes(x=reorder(NAICS_INDUSTRY, pct_denied), y=pct_denied)) + 
+  geom_col() + 
+  theme_classic() + 
+  coord_flip() + 
+  xlab(NULL) + 
+  ylab("Percent of cases denied") + 
+  ggtitle("PERM: most denied industries as a percent of applications")
+
+multiplot(h1, p)
+``` 
+
+Compared to the number of applications, industries that are commonly considered "blue collar" or "low skill" are at the top of these lists. Also notable are Arts, Entertainment and Recreation, Public Administration, Real Estate, Heath Care, and Educational Services. These seem to be industries that are under-represented among recipients, and clearly they're getting denied at a higher rate.
+
+### Modeling acceptance in the PERM program
+
+In this section, I attempt to use job title, wage, and NAICS industry to predict acceptance. The first question I had was, which version of job title represented in this data would be best used for modeling?
+
+```{r}
+#which title to use?
+perm[,c('JOB_INFO_JOB_TITLE', 'PW_SOC_TITLE', 'JOB_INFO_ALT_OCC_JOB_TITLE', 'PW_JOB_TITLE_9089')] %>% head()
+mean(is.na(as.character(perm$JOB_INFO_JOB_TITLE))) # 0.00031
+n_distinct(as.character(perm$JOB_INFO_JOB_TITLE)) # 34547
+mean(is.na(as.character(perm$PW_SOC_TITLE))) # 0.0009350788
+n_distinct(as.character(perm$PW_SOC_TITLE)) # 677
+mean(is.na(as.character(perm$JOB_INFO_ALT_OCC_JOB_TITLE))) # 0.31
+n_distinct(as.character(perm$JOB_INFO_ALT_OCC_JOB_TITLE)) # 38941
+mean(is.na(as.character(perm$PW_JOB_TITLE_9089))) # 0.0002
+n_distinct(as.character(perm$PW_JOB_TITLE_9089)) # 7778
+#seems like PW_SOC_TITLE is a winner
+```
+
+Next, I did some further cleaning on the data to unify wage into a single number represented yearly. For cases where I had wage offer data, I averaged the lower and upper bounds of the offer.
+```{r}
+require(dplyr)
+require(tidyr)
+require(ggplot2)
+fact_to_num <- function(x) {
+  return(
+    as.numeric(gsub("[, ]", "", as.character(x)))
+  )
+}
+perm$CERTIFIED = perm$CASE_STATUS %in% c("Certified", "Certified-Expired")
+miniperm = perm[,c(
+  "NAICS_US_CODE",
+  "PW_SOC_TITLE",
+  "WAGE_OFFER_UNIT_OF_PAY_9089",
+  "WAGE_OFFER_FROM_9089",
+  "WAGE_OFFER_TO_9089",
+  "PW_AMOUNT_9089",
+  "PW_UNIT_OF_PAY_9089",
+  "CERTIFIED"
+)] %>% mutate(
+    NAICS_PREFIX = factor(substr(NAICS_US_CODE, 0, 2)),
+    wo_multiplier = ifelse(WAGE_OFFER_UNIT_OF_PAY_9089 == 'Hour', 8670,
+                     ifelse(WAGE_OFFER_UNIT_OF_PAY_9089 == 'Week', 52.1429,
+                     ifelse(WAGE_OFFER_UNIT_OF_PAY_9089 == 'Month', 12,
+                     ifelse(WAGE_OFFER_UNIT_OF_PAY_9089 == 'Bi-Weekly', 96, 1)))),
+    pw_multiplier = ifelse(PW_UNIT_OF_PAY_9089 == 'Hour', 8670,
+                     ifelse(PW_UNIT_OF_PAY_9089 == 'Week', 52.1429,
+                     ifelse(PW_UNIT_OF_PAY_9089 == 'Month', 12,
+                     ifelse(PW_UNIT_OF_PAY_9089 == 'Bi-Weekly', 96, 1)))),
+    WAGE_OFFER_FROM_9089 = fact_to_num(WAGE_OFFER_FROM_9089),
+    WAGE_OFFER_TO_9089 = fact_to_num(WAGE_OFFER_TO_9089),
+    PW_AMOUNT_9089 = fact_to_num(PW_AMOUNT_9089)
+)
+miniperm$WAGE_OFFER = rowMeans(miniperm[,c('WAGE_OFFER_FROM_9089', 'WAGE_OFFER_TO_9089')], na.rm=T)
+miniperm = miniperm %>% mutate(
+    WO_PER_YEAR = WAGE_OFFER * wo_multiplier,
+    PW_PER_YEAR = PW_AMOUNT_9089 * pw_multiplier,
+    title = PW_SOC_TITLE,
+    wage = ifelse(!is.na(WO_PER_YEAR) & !is.na(PW_PER_YEAR), WO_PER_YEAR,
+           ifelse(is.na(WO_PER_YEAR) & !is.na(PW_PER_YEAR), PW_PER_YEAR,
+           ifelse(!is.na(WO_PER_YEAR) * is.na(PW_PER_YEAR), WO_PER_YEAR, NA)))
+) %>%
+  filter(wage < 1e7) %>%
+  select(
+  -WAGE_OFFER_UNIT_OF_PAY_9089, 
+  -WAGE_OFFER_FROM_9089,
+  -WAGE_OFFER_TO_9089, 
+  -PW_AMOUNT_9089,
+  -PW_UNIT_OF_PAY_9089,
+  -WAGE_OFFER,
+  -wo_multiplier, 
+  -pw_multiplier, 
+  -PW_SOC_TITLE,
+  -WO_PER_YEAR,
+  -PW_PER_YEAR) %>% remove_missing
+```
+
+Next I take the top 50 job titles and convert all the remaining titles into "other", so there are a limited number of factors in my model. This is where I created the density plots of job wage.
+
+```{r}
+top_50_titles = miniperm %>% group_by(as.character(title)) %>% count() %>% arrange(-n) %>% head(50) %>% pull(1)
+mean(!(miniperm$title %in% top_50_titles)) # 0.179
+miniperm[!(miniperm$title %in% top_50_titles), 'title'] = "other"
+
+require(scales)
+miniperm %>% 
+  filter(wage < 5e5) %>%
+  mutate(CERTIFIED=ifelse(CERTIFIED, "Accepted", "Denied")) %>%
+  ggplot(aes(x=wage)) +
+  geom_density(fill="skyblue", color="skyblue") + 
+  facet_grid(CERTIFIED ~ ., scales = "free_y") + 
+  theme_classic() +
+  xlab("Salary (yearly)") + 
+  scale_x_continuous(labels = comma) 
+```
+
+Next, I created a training set using 80% of the data, with a 20% holdout. I further subsampled to balance the training set, so the model would see an equal number of positive and negative cases. This has been shown to increase classifier performance. [6]
+
+```{r}
+# Training set
+library(ROCR)
+
+set.seed(1234)
+randoms = runif(nrow(miniperm))
+train = miniperm[randoms < 0.80,]  # 42898
+test = miniperm[randoms >= 0.80,]  # 10695
+
+# Create a balanced set by downsampling TRUE to match FALSE (8244)
+train %>% group_by(CERTIFIED) %>% count()
+#FALSE	3200			
+#TRUE	  39698
+
+# Start by creating a balanced set (downsampling CERTIFIED rows to match the number of not certified)
+set.seed(1233)
+balanced = train[!train$CERTIFIED,]
+balanced = rbind(balanced, train %>% filter(CERTIFIED) %>% sample_n(nrow(balanced)))
+balanced %>% group_by(CERTIFIED) %>% count()
+# FALSE	3200			
+# TRUE	3200
+```
+
+For my first attempt, I created a model with prefix interacting with wage and measured its performance on the held-out test set:
+```{r, fig.width=5, fig.height=5}
+logres = glm(CERTIFIED ~ NAICS_PREFIX * wage, family=binomial(link = "logit"), data=balanced)
+pred <- prediction(predict(logres, test), test$CERTIFIED)
+roc.perf = performance(pred, measure = "tpr", x.measure = "fpr")
+plot(roc.perf, main=paste0("AUC: ", performance(pred, measure = "auc")@y.values[[1]]))
+abline(a=0, b=1)
+```
+
+Which coefficients had a positive effect on certifications?
+```{r}
+coeffs = as.data.frame(coefficients(logres))
+colnames(coeffs) = "value"
+coeffs$name = rownames(coeffs)
+rownames(coeffs) = NULL
+coeffs = coeffs %>% mutate(prefix = ifelse(startsWith(name, "NAICS_PREFIX"), substr(name, 13, nchar(name)), NA)) %>%
+  left_join(naics, by=c("prefix"="code"))
+coeffs %>% arrange(-value)
+```
+
+And which coefficients had a negative effect on certification rates?
+```{r}
+coeffs %>% arrange(value)
+#49 -transportation and warehousing
+```
+
+#### Including job title
+I tried another version including the job title
+
+```{r, fig.width=5, fig.height=5}
+incl_title = glm(CERTIFIED ~ NAICS_PREFIX * wage + title, family=binomial(link = "logit"), data=balanced)
+pred <- prediction(predict(incl_title, test), test$CERTIFIED)
+roc.perf = performance(pred, measure = "tpr", x.measure = "fpr")
+plot(roc.perf, main=paste0("AUC: ", performance(pred, measure = "auc")@y.values[[1]]))
+abline(a=0, b=1)
+```
+
+Positive features:
+```{r}
+coeffs = as.data.frame(coefficients(incl_title))
+colnames(coeffs) = "value"
+coeffs$name = rownames(coeffs)
+rownames(coeffs) = NULL
+coeffs = coeffs %>% mutate(prefix = ifelse(startsWith(name, "NAICS_PREFIX"), substr(name, 13, nchar(name)), NA)) %>%
+  left_join(naics, by=c("prefix"="code"))
+coeffs %>% arrange(-value) %>% head(n=30)
+```
+
+Negative features:
+```{r}
+coeffs %>% arrange(value) %>% head(n=30)
+#71 arts
+```
+
+#### Wage as a single predictor?
+I tried a model with wage alone:
+```{r, fig.width=5, fig.height=5}
+wage_only = glm(CERTIFIED ~ wage, family=binomial(link = "logit"), data=balanced)
+pred <- prediction(predict(wage_only, test), test$CERTIFIED)
+roc.perf = performance(pred, measure = "tpr", x.measure = "fpr")
+plot(roc.perf, main=paste0("AUC: ", performance(pred, measure = "auc")@y.values[[1]]))
+abline(a=0, b=1)
+```
+
+More on this model:
+```{r}
+#ACC
+summary(wage_only)
+```
+
+Model accuracy?
+```{r}
+#ACC
+mean( (predict(wage_only, test) > 0) == test$CERTIFIED )
+```
+
+#### Modeling the H1B program
+Now, I try applying the same technique to the H1B program, only using NAICS-provided job title and industry instead of wage.
+```{r}
+set.seed(1367)
+rands = runif(nrow(h1b))
+h1b_train = h1b[rands <= .9,]
+h1b_test = h1b[rands > .9,]
+
+h1b_train_balanced = h1b_train[!h1b_train$CERTIFIED,]
+h1b_train_balanced = rbind(h1b_train_balanced, h1b_train %>% filter(CERTIFIED) %>% sample_n(nrow(h1b_train_balanced)))
+ h1b_train_balanced$CERTIFIED %>% table
+```
+
+As before, I want to consider only the top 50 job titles:
+```{r}
+top50 = as.character(h1b_train_balanced %>% group_by(NAICS_JOB_TITLE) 
+                     %>% count() %>% arrange(-n) 
+                     %>% head(50) %>% pull(NAICS_JOB_TITLE))
+
+h1b_train_balanced = h1b_train_balanced %>% mutate(
+  title = as.character(ifelse(NAICS_JOB_TITLE %in% top50, NAICS_JOB_TITLE, "Other")),
+  NAICS_INDUSTRY = ifelse(is.na(NAICS_INDUSTRY), "Other", NAICS_INDUSTRY),
+  title = ifelse(is.na(title), "Other", title)
+) %>% select(CERTIFIED, title, NAICS_INDUSTRY)
+
+h1b_test = h1b_test %>% mutate(
+  title = as.character(ifelse(NAICS_JOB_TITLE %in% top50, NAICS_JOB_TITLE, "Other")),
+  NAICS_INDUSTRY = ifelse(is.na(NAICS_INDUSTRY), "Other", NAICS_INDUSTRY),
+  title = ifelse(is.na(title), "Other", title)
+) %>% select(CERTIFIED, title, NAICS_INDUSTRY)
+
+any(!(unique(h1b_test$title) %in% h1b_train_balanced$title))  # confirm there's nothing in the test set we haven't seen before
+h1b_test$title  = factor(h1b_test$title, levels=c(top50, "Other"))
+h1b_train_balanced$title = factor(h1b_train_balanced$title, levels=c(top50, "Other"))
+```
+As before, I set up a logistic regression:
+
+```{r}
+h1bl = glm(CERTIFIED ~ title + NAICS_INDUSTRY, family=binomial(link = "logit"), data=h1b_train_balanced)
+pred <- prediction(predict(h1bl, newdata=h1b_test), h1b_test$CERTIFIED)
+roc.perf = performance(pred, measure = "tpr", x.measure = "fpr")
+plot(roc.perf, main=
+       paste0("AUC: ", performance(pred, measure = "auc")@y.values[[1]], " / accuracy: ", mean((predict(h1bl, newdata=h1b_test) > 0) == h1b_test$CERTIFIED)))
+abline(a=0, b=1)
+```
+
+Positive features
+```{r}
+coeffs = as.data.frame(coefficients(h1bl))
+colnames(coeffs) = "value"
+coeffs$name = rownames(coeffs)
+rownames(coeffs) = NULL
+coeffs %>% arrange(-value) %>% head(n=30)
+```
+
+Negative features:
+```{r}
+coeffs %>% arrange(value) %>% head(n=30)
+```
+
+# Discussion
+From my exploratory data analysis, it seems clear that the distribution of approved H1B and PERM certifications is heavily biased specifically toward software roles across a variety of tech industries. Computer systems design, electronic shopping, and software publishers make up the heavy tail of the role distributions across both programs, mostly in the professional services, information, and finance fields. Industries like agriculture, arts, accomodation, and public administration face the highest rejection rates across both programs.
+
+Modeling acceptance in the PERM program was surprisingly effective, generating high AUCs, but didn't add a huge amount of new information to the EDA, aside from reinforcing that there are some fields with high acceptance rates. The second model clearly demonstrated that Arts, Entertainment, and Recreation had a large negative effect on the likelihood of acceptance, as did "Farmworkers and Laborers, Crop, Nursery, and Greenhouse", the Utilities field, Packers, Landscapers, etc. Since we know these program are designed for highly skilled labor, this isn't a surprise. 
+
+We can get a little more information from the H1B model, though its predictive power wasn't as good. The features with a positive effect on certification were Management, Information, Finance, and some specific jobs - OTs, STEM consulting, programming, and dentists. The features with a negative effect were Arts, Agriculture, Pharmacies and Drug Stores, Educational Support, Marketing, Lawyers, Architectural Services, etc. 
+
+# Conclusion
+
+In this analysis I have demonstrated that the H1B and PERM programs are benefitting some sectors of the American economy over others. In effect, over the last year, these programs have been set up so they benefit STEM workers - especially computer programming - over other kinds of highly-skilled workers. The H1B model demonstrated this by showing that when highly skilled workers compete for limited positions, non-tech occupations negatively affect the chances of being certified by the Department of Labor.
+
+I examined this data because I was curious whether these programs are meeting their stated goals, and because I was curious if there was bias among the jobs being certified for foreign work. Having completed this analysis, I argue that these programs are catering to a very narrow and myopic view of the "skilled labor" definition - one that focuses on computer engineering over other kinds of skills that are also in demand in the U.S. economy. Though these programs are only a part of the massive constellation of immigration programs in U.S. law, they paint a rather bleak picture of the kinds of skills that the U.S. consideres valuable and in-demand.
+
+# References
+[1] Wikipedia contributors, "Bracero program," Wikipedia, The Free Encyclopedia, https://en.wikipedia.org/w/index.php?title=Bracero_program&oldid=869901577 (accessed December 9, 2018). 
+
+[2] Tseng-Putterman, Mark. "A Century of U.S. Intervention Created the Immigration Crisis." Medium.com. June 28, 2018. Accessed December 09, 2018. https://medium.com/s/story/timeline-us-intervention-central-america-a9bea9ebc148.
+
+[3] https://redbus2us.com/h1b-revoked-withdrawal-termination-by-employer-uscis-oh-my-options/
+
+[4] https://www.immihelp.com/forum/showthread.php/63377-Case-Status-Certified-Expired
+
+[5] “Multiple Graphs on One Page (ggplot2).” Cookbook for R, www.cookbook-r.com/Graphs/Multiple_graphs_on_one_page_(ggplot2)/. 
+
+[6] Wei Q, Dunbrack RL Jr (2013) The Role of Balanced Training and Testing Data Sets for Binary Classifiers in Bioinformatics. PLOS ONE 8(7): e67863. https://doi.org/10.1371/journal.pone.0067863
+
+[7] "The H1B Visa Program: A Primer on the Program and Its Impact on Jobs, Wages, and the Economy." April 2018. https://www.americanimmigrationcouncil.org/sites/default/files/research/the_h-1b_visa_program_a_primer_on_the_program_and_its_impact_on_jobs_wages_and_the_economy.pdf.
+
+[8] People Matters Pte. Ltd. "The H1B Visa Struggle: No Relief in Sight." People Matters. November 12, 2018. Accessed December 09, 2018. https://www.peoplemattersglobal.com/article/hiring/the-h1b-visa-struggle-no-relief-in-sight-18472.
+
+# Appendix: Code used to generate presentation graphics
+
+```{r}
+require(dplyr)
+require(ggplot2)
+# Top employers
+h1b %>% 
+  mutate(employer = ifelse(is.na(EMPLOYER_NAME), as.character(EMPLOYER_BUSINESS_DBA), as.character(EMPLOYER_NAME))) %>% 
+  #filter(CASE_STATUS == "CERTIFIED") %>% 
+  group_by(employer) %>%
+  summarize(
+    total_requests = sum(fact_to_num(TOTAL_WORKERS)),
+    accepted = sum(ifelse(!is.na(CASE_STATUS) & CASE_STATUS=="CERTIFIED", fact_to_num(TOTAL_WORKERS), 0)),
+    denied = sum(ifelse(is.na(CASE_STATUS) | CASE_STATUS=="DENIED", fact_to_num(TOTAL_WORKERS), 0))
+  ) %>% arrange(-total_requests) %>% head(n=20)
+```
+
+```{r}
+h1b_acceptance_and_denials = h1b %>% 
+  mutate(employer = ifelse(is.na(EMPLOYER_NAME), as.character(EMPLOYER_BUSINESS_DBA), as.character(EMPLOYER_NAME))) %>% 
+  #filter(CASE_STATUS == "CERTIFIED") %>% 
+  group_by(employer) %>%
+  summarize(
+    total_requests = sum(as.numeric(TOTAL_WORKERS)),
+    accepted = sum(ifelse(!is.na(CASE_STATUS) & CASE_STATUS=="CERTIFIED", fact_to_num(TOTAL_WORKERS), 0)),
+    denied = sum(ifelse(is.na(CASE_STATUS) | CASE_STATUS=="DENIED", fact_to_num(TOTAL_WORKERS), 0)),
+    acceptance_rate = accepted/total_requests
+  )
+
+h1b_acceptance_and_denials %>%
+  filter(acceptance_rate < 1) %>%
+  arrange(-acceptance_rate) %>% head(n=20)
+```
+
+```{r}
+require(ggplot2)
+perm_a_and_d = perm %>% 
+  mutate(
+    certified = !is.na(CASE_STATUS) & (CASE_STATUS == "Certified" | CASE_STATUS == "Certified-Expired")
+  ) %>%
+  group_by(EMPLOYER_NAME, EMPLOYER_NUM_EMPLOYEES, NAICS_US_TITLE, JOB_INFO_JOB_TITLE) %>%
+  summarize(
+    total_requests = n(),
+    accepted = sum(certified),
+    denied = sum(!certified),
+    acceptance_rate = accepted/total_requests
+  )
+
+perm_a_and_d %>%
+  group_by(JOB_INFO_JOB_TITLE) %>%
+  summarize(
+    total_requests = sum(total_requests),
+    accepted = sum(accepted),
+    denied = sum(denied),
+    acceptance_rate = accepted/total_requests
+  ) %>%
+  filter(acceptance_rate < 1) %>%
+  arrange(-accepted) %>% head(n=20)
+```
+
+```{r}
+perm_a_and_d %>%
+  group_by(JOB_INFO_JOB_TITLE) %>%
+  summarize(
+    total_requests = sum(total_requests),
+    accepted = sum(accepted),
+    denied = sum(denied),
+    acceptance_rate = accepted/total_requests
+  ) %>%
+  arrange(acceptance_rate, -denied) %>% head(n=20)
+```
